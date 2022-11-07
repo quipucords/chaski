@@ -8,7 +8,9 @@ import yaml
 from rich.console import Console
 
 console = Console()
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
+
+QUIPUCORDS_SERVER = "quipucords-server"
 
 
 @app.command()
@@ -29,6 +31,7 @@ def update_remote_sources(downstream_path: Path):
             console.print(f"\[{source['name']}] Nothing to update")
         else:
             console.print(f"\[{source['name']}] updating ref to '{commit_sha}'")
+            _side_effects(source, commit_sha)
             source["remote_source"]["ref"] = commit_sha
             perform_update = True
 
@@ -36,6 +39,18 @@ def update_remote_sources(downstream_path: Path):
         console.print("Updating container.yaml")
         console.print(container_data)
         yaml.dump(container_data, container_path.open("w"))
+
+
+@app.command()
+def update_quipucords_hash(downstream_path: Path):
+    console.print("Forcibly updating QUIPUCORDS_COMMIT ARG on Dockerfile")
+    os.chdir(downstream_path)
+    container_path = Path("container.yaml")
+    container_data = yaml.safe_load(container_path.open())
+    for source in container_data["remote_sources"]:
+        if source["name"] == QUIPUCORDS_SERVER:
+            break
+    _update_quipucords_sha(source["remote_source"]["ref"])
 
 
 def _get_commit_sha(user, repository, commitsh):
@@ -49,6 +64,23 @@ def _get_commit_sha(user, repository, commitsh):
     )
     console.print("Status code:", gh_response.status_code)
     raise typer.Abort()
+
+
+def _side_effects(source, new_commit):
+    if not source["name"] == QUIPUCORDS_SERVER:
+        return
+    _update_quipucords_sha(new_commit)
+
+
+def _update_quipucords_sha(new_commit):
+    console.print("Updating Dockerfile ARG QUIPUCORDS_COMMIT")
+    dockerfile = Path("Dockerfile")
+    updated_dockerfile = re.sub(
+        r"ARG QUIPUCORDS_COMMIT=.*",
+        f'ARG QUIPUCORDS_COMMIT="{new_commit}"',
+        dockerfile.read_text(),
+    )
+    dockerfile.write_text(updated_dockerfile)
 
 
 if __name__ == "__main__":
