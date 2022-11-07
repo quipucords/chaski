@@ -14,10 +14,37 @@ app = typer.Typer(no_args_is_help=True)
 QUIPUCORDS_REQUIREMENTS_URL = "https://raw.githubusercontent.com/%s/%s/requirements.txt"
 QUIPUCORDS_SERVER = "quipucords-server"
 
+distgit_path_arg = typer.Argument(
+    ...,
+    help="path to folder where discovery-server is cloned",
+    metavar="distgit-path",
+    show_default=False,
+)
+
+
+cryptography_version_arg = typer.Argument(
+    None,
+    help="cryptography version (format: X.Y.Z).",
+    metavar="cryptography-version",
+    show_default=False,
+)
+
 
 @app.command()
-def update_remote_sources(downstream_path: Path):
-    os.chdir(downstream_path)
+def update_remote_sources(distgit_path: Path = distgit_path_arg):
+    """
+    Update remote-sources on 'container.yaml' based on 'sources-version.yaml'.
+
+    If changes are detected to quipucords-server, than this will also invoke
+    the following subcommands:
+
+    - update-quipucords-sha
+
+    - update-cryptography IF changes to this lib are detected.
+
+    Check --help method of these subcommands for more info.
+    """
+    os.chdir(distgit_path)
     repo_regex = re.compile(r"([-\w]+)/([-\w]+).git")
 
     versions_path = Path("sources-version.yaml")
@@ -39,14 +66,33 @@ def update_remote_sources(downstream_path: Path):
 
     if perform_update:
         console.print("Updating container.yaml")
-        console.print(container_data)
         yaml.dump(container_data, container_path.open("w"))
+        _print_downstream_instructions(distgit_path)
+    else:
+        console.print("Nothing to update. Go treat yourself with some coffee :coffee:")
+
+
+def _print_downstream_instructions(distgit_path: Path):
+    """Remind the user commands for downstream building."""
+    RHPKG_COMMAND = "rhpkg container-build --target=<target-build>"
+    RHPKG_EXAMPLE = (
+        "rhpkg container-build --target=discovery-1.1-rhel-8-containers-candidate"
+    )
+    SCRATCH_OPTION = "--scratch if this is still in development"
+    console.print("You are almost ready for a downstream build! :ship:")
+    console.print(
+        f"Check the changes on [green]{distgit_path}[/green], commit"
+        " and push :rocket:"
+    )
+    console.print(f"Then run [green]{RHPKG_COMMAND}[/green] \[{SCRATCH_OPTION}]")
+    console.print(f"Example: [green]{RHPKG_EXAMPLE}[/green] :coffee:")
 
 
 @app.command()
-def update_quipucords_hash(downstream_path: Path):
+def update_quipucords_hash(distgit_path: Path = distgit_path_arg):
+    """Update QUIPUCORDS_COMMIT ARG on Dockerfile."""
     console.print("Forcibly updating QUIPUCORDS_COMMIT ARG on Dockerfile")
-    os.chdir(downstream_path)
+    os.chdir(distgit_path)
     source = _get_quipucords_source()
     _update_quipucords_sha(source["remote_source"]["ref"])
 
@@ -61,8 +107,15 @@ def _get_quipucords_source():
 
 
 @app.command()
-def update_cryptography(downstream_path: Path, cryptography_version: str = None):
-    os.chdir(downstream_path)
+def update_cryptography(
+    distgit_path: Path = distgit_path_arg,
+    cryptography_version: str = cryptography_version_arg,
+):
+    """Update python-cryptography lib.
+
+    Defaults to the version defined on current quipucords-server.
+    """
+    os.chdir(distgit_path)
     if not cryptography_version:
         console.print("cryptography version not specified.")
         console.print(f"Using the one from {QUIPUCORDS_SERVER} source.")
