@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "chaski"
+version = "0.1.0"
+description = ""
+authors = ["Bruno Ciconelle <bciconel@redhat.com>"]
+readme = "README.md"
+
+[tool.poetry.scripts]
+chaski = 'app:app'
+
+[tool.poetry.dependencies]
+python = "^3.9"
+toml = "^0.10.2"
+PyYAML = "^6.0"
+requests = "^2.28.1"
+typer = {extras = ["all"], version = "^0.6.1"}
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.10.0"
+ipykernel = "^6.15.1"
+isort = "^5.10.1"
+flakeheaven = "^3.2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
