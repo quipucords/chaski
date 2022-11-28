@@ -1,5 +1,8 @@
+import io
+import json
 import os
 import re
+import tarfile
 from pathlib import Path
 
 import requests
@@ -11,8 +14,12 @@ from rich.console import Console
 console = Console()
 app = typer.Typer(no_args_is_help=True)
 
+CARGO_LOCAL_CACHE = ".cargo/registry/cache/github.com-1ecc6299db9ec823"
+CARGO_PKG_PREFIX = "rust-crate-"
+CONTAINER_YAML = "container.yaml"
 QUIPUCORDS_REQUIREMENTS_URL = "https://raw.githubusercontent.com/%s/%s/requirements.txt"
 QUIPUCORDS_SERVER = "quipucords-server"
+SOURCES_VERSION_YAML = "sources-version.yaml"
 
 distgit_path_arg = typer.Argument(
     ...,
@@ -40,21 +47,25 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
 
     - update-quipucords-sha
 
-    - update-cryptography IF changes to this lib are detected.
+    - update-cryptography dependencies when a version change is detected.
 
     Check --help method of these subcommands for more info.
     """
+    distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
-    repo_regex = re.compile(r"([-\w]+)/([-\w]+).git")
+    repo_regex = re.compile(r"([-\w]+)/([-\w\.]+).git")
 
-    versions_path = Path("sources-version.yaml")
-    container_path = Path("container.yaml")
+    versions_path = Path(SOURCES_VERSION_YAML)
+    container_path = Path(CONTAINER_YAML)
     commitsh_map = yaml.safe_load(versions_path.open())
     container_data = yaml.safe_load(container_path.open())
     perform_update = False
     for source in container_data["remote_sources"]:
+        try:
+            commitsh = commitsh_map[source["name"]]
+        except KeyError:
+            continue
         user, repository = repo_regex.search(source["remote_source"]["repo"]).groups()
-        commitsh = commitsh_map[source["name"]]
         commit_sha = _get_commit_sha(user, repository, commitsh)
         if commit_sha == source["remote_source"]["ref"]:
             console.print(f"\[{source['name']}] Nothing to update")
@@ -92,13 +103,14 @@ def _print_downstream_instructions(distgit_path: Path):
 def update_quipucords_hash(distgit_path: Path = distgit_path_arg):
     """Update QUIPUCORDS_COMMIT ARG on Dockerfile."""
     console.print("Forcibly updating QUIPUCORDS_COMMIT ARG on Dockerfile")
+    distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
     source = _get_quipucords_source()
     _update_quipucords_sha(source["remote_source"]["ref"])
 
 
 def _get_quipucords_source():
-    container_path = Path("container.yaml")
+    container_path = Path(CONTAINER_YAML)
     container_data = yaml.safe_load(container_path.open())
     for source in container_data["remote_sources"]:
         if source["name"] == QUIPUCORDS_SERVER:
@@ -115,6 +127,7 @@ def update_cryptography(
 
     Defaults to the version defined on current quipucords-server.
     """
+    distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
     if not cryptography_version:
         console.print("cryptography version not specified.")
@@ -186,34 +199,48 @@ def _get_cryptography_version(quipucords_repo, quipucords_sha):
 
 
 def _update_cryptography(cryptography_version):
-    console.print(f"Updating rust dependencies for cryptography={cryptography_version}")
-    CRATES_IO_DOWNLOAD_URL = "https://crates.io/api/v1/crates/%s/%s/download"
-    CRYPTOGRAPHY_CARGO_LOCK_URL = (
-        "https://raw.githubusercontent.com/pyca/cryptography/%s/src/rust/Cargo.lock"
-    )
-    # because cachito doesn't support rust, reference rust deps in a different method
-    # https://osbs.readthedocs.io/en/latest/users.html#fetch-artifacts-url-yaml
-    fetch_artifacts_yaml = Path("fetch-artifacts-url.yaml")
-    cryptography_rust_url = CRYPTOGRAPHY_CARGO_LOCK_URL % cryptography_version
-    cryptography_cargo_lock = requests.get(cryptography_rust_url).content.decode()
-    cargo_lock_dict = toml.loads(cryptography_cargo_lock)
-    artifacts_url = []
-    for dep_dict in cargo_lock_dict["package"]:
-        if dep_dict["name"] == "cryptography-rust":
-            continue
-        _check_crates_io_source(dep_dict)
-        pkg_name = dep_dict["name"]
-        version = dep_dict["version"]
-        pkg_url = CRATES_IO_DOWNLOAD_URL % (pkg_name.lower(), version)
-        entry = {
-            "url": pkg_url,
-            "source-url": pkg_url,
-            "sha256": dep_dict["checksum"],
-            "source-sha256": dep_dict["checksum"],
-            "target": f"rust/{pkg_name}-{version}.crate",
-        }
-        artifacts_url.append(entry)
-    yaml.dump(artifacts_url, fetch_artifacts_yaml.open("w"))
+    cargo_sources = []
+    if tuple(cryptography_version.split(".")) < ("3", "4", "0"):
+        console.print(
+            f"cryptographt version {cryptography_version} don't have rust dependencies"
+        )
+    else:
+        cryptography_cargo_lock_url = (
+            "https://raw.githubusercontent.com/pyca/cryptography/%s/src/rust/Cargo.lock"
+        )
+        console.print(
+            f"Updating rust dependencies for cryptography={cryptography_version}"
+        )
+        cryptography_rust_url = cryptography_cargo_lock_url % cryptography_version
+        cryptography_cargo_lock = requests.get(cryptography_rust_url).content.decode()
+        cargo_lock_dict = toml.loads(cryptography_cargo_lock)
+        ignored_cargo = [
+            "cryptography-rust",
+            "winapi-i686-pc-windows-gnu",
+            "winapi-x86_64-pc-windows-gnu",
+        ]
+        for dep_dict in cargo_lock_dict["package"]:
+            pkg_name = dep_dict["name"]
+            version = dep_dict["version"]
+            if pkg_name in ignored_cargo:
+                continue
+            _check_crates_io_source(dep_dict)
+            repo, git_sha = _get_crate_repo_and_sha(pkg_name, version)
+            cargo_sources.append(
+                {
+                    "name": f"rust-crate-{pkg_name}-{version.replace('.', '_')}",
+                    "remote_source": {"pkg_managers": [], "ref": git_sha, "repo": repo},
+                }
+            )
+    container_path = Path(CONTAINER_YAML)
+    container_data = yaml.safe_load(container_path.open())
+    sources = [
+        source
+        for source in container_data["remote_sources"]
+        if not source["name"].startswith("rust-crate-")
+    ]
+    container_data["remote_sources"] = sources + cargo_sources
+    yaml.dump(container_data, container_path.open("w"))
 
 
 def _check_crates_io_source(dep_dict):
@@ -230,6 +257,46 @@ def _check_crates_io_source(dep_dict):
         console.print("Offending rust dependency:")
         console.print_json(data=dep_dict)
         raise typer.Abort()
+
+
+def _get_crate_repo_and_sha(crate_name, version):
+    CRATES_IO_PACKAGE_URL = "https://crates.io/api/v1/crates/%s"
+    response = requests.get(CRATES_IO_PACKAGE_URL % crate_name)
+    if not response.ok:
+        console.print(f"Failed to find crate {crate_name} in 'crates.io'", style="red")
+        raise typer.Abort()
+    data = response.json()
+    repository = data["crate"]["repository"]
+    if not repository.endswith(".git"):
+        repository += ".git"
+    crate = _get_crate(crate_name, version)
+    with tarfile.open(fileobj=crate.open("rb")) as tarball:
+        vcs_info_file = f"{crate_name}-{version}/.cargo_vcs_info.json"
+        try:
+            vcs_info = json.loads(tarball.extractfile(vcs_info_file).read())
+            git_sha = vcs_info["git"]["sha1"]
+        except KeyError:
+            console.print(f"Unable to dectect git sha for {crate_name}")
+            git_sha = "unknown"
+    return repository, git_sha
+
+
+def _get_crate(crate_name, version) -> Path:
+    CRATES_IO_DOWNLOAD_URL = "https://crates.io/api/v1/crates/%s/%s/download"
+    cargo_cache_dir = Path.home() / CARGO_LOCAL_CACHE
+    cargo_cache_dir.mkdir(exist_ok=True)
+    crate = cargo_cache_dir / f"{crate_name}-{version}.crate"
+    pretty_crate = f"[magenta]{crate_name}[/magenta]=[green]{version}[/green]"
+    if crate.exists():
+        console.print(f"Using cached version for crate {pretty_crate}")
+        return crate
+    console.print(f"Downloading crate {pretty_crate}")
+    dl_resp = requests.get(CRATES_IO_DOWNLOAD_URL % (crate_name, version))
+    if not dl_resp.ok:
+        console.print(f"Failed to find crate {crate_name} in 'crates.io'", style="red")
+        raise typer.Abort()
+    crate.write_bytes(dl_resp.content)
+    return crate
 
 
 if __name__ == "__main__":
