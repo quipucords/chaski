@@ -1,5 +1,5 @@
 # chaski
-chaski mission is to help delivering upstream code to downstream build system.
+chaski mission is to help delivering upstream code to the downstream build system.
 
 ## Creating a downstream build
 
