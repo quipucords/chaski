@@ -24,6 +24,14 @@ flakeheaven = "^3.2.0"
 flake8-isort = "^6.0.0"
 flake8-black = "^0.3.6"
 
+[tool.poetry.group.commit-lint.dependencies]
+commitizen = "^2.40.0"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.0.0"
+tag_format = "$version"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
