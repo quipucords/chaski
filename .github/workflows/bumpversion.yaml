@@ -7,27 +7,63 @@ on:
 
 jobs:
   bump_version:
-    if: "!startsWith(github.event.head_commit.message, 'bump:')"
     runs-on: ubuntu-latest
     name: "Bump version and create changelog with commitizen"
+    env:
+      GIT_USER_NAME: quipucords-bot
+      GIT_USER_EMAIL: quipucords@redhat.com
     steps:
-      - name: Check out
-        uses: actions/checkout@v2
+      - name: Check out code
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: "${{ secrets.GITHUB_TOKEN }}"
-      - id: cz
-        name: Create bump and changelog
-        uses: commitizen-tools/commitizen-action@master
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4.5.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          changelog_increment_filename: body.md
-      - name: Print Version
-        run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
+          python-version: "3.9"
+          cache: "poetry"
+          cache-dependency-path: "poetry.lock"
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=commit-lint --no-root
+
+      - name: Bump version
+        if: "!startsWith(github.event.head_commit.message, 'bump:')"
+        run: |
+          poetry run cz bump --files-only --yes --changelog --changelog-to-stdout > changelog-increment.md
+          git config user.name ${GIT_USER_NAME}
+          git config user.email ${GIT_USER_EMAIL}
+          echo "bump: release $(poetry run cz version --project)\n" > commit-message
+          cat changelog-increment.md >> commit-message
+          git commit -aF commit-message
+          rm changelog-increment.md commit-message
+
+      - name: Create Pull Request
+        if: "!startsWith(github.event.head_commit.message, 'bump:')"
+        uses: peter-evans/create-pull-request@v4
+        with:
+          author: "${{ env.GIT_USER_NAME }} <${{ env.GIT_USER_EMAIL }}>"
+          base: main
+          body: Update version and changelog
+          branch: bump-version
+          title: "[auto] Bump Version + Changelog"
+
+      - name: Setup release
+        if: "startsWith(github.event.head_commit.message, 'bump:')"
+        run: |
+          echo "VERSION_NUMBER=$(poetry run cz version --project)" >> $GITHUB_ENV
+          git show -s --format=%b > changelog-increment.md
+
       - name: Release
+        if: "startsWith(github.event.head_commit.message, 'bump:')"
         uses: softprops/action-gh-release@v1
         with:
-          body_path: "body.md"
-          tag_name: ${{ env.REVISION }}
+          body_path: "changelog-increment.md"
+          tag_name: ${{ env.VERSION_NUMBER }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
