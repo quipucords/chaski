@@ -38,7 +38,7 @@ jobs:
           poetry run cz bump --files-only --yes --changelog --changelog-to-stdout > changelog-increment.md
           git config user.name ${GIT_USER_NAME}
           git config user.email ${GIT_USER_EMAIL}
-          echo "bump: release $(poetry run cz version --project)\n" > commit-message
+          echo -e "bump: release $(poetry run cz version --project)\n" > commit-message
           cat changelog-increment.md >> commit-message
           git commit -aF commit-message
           rm changelog-increment.md commit-message
