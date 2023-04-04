@@ -1,3 +1,13 @@
+## 0.2.0 (2023-04-04)
+
+### Feat
+
+- update DISCOVERY_VERSION automatically
+
+### Fix
+
+- typo
+
 ## 0.1.0 (2023-03-17)
 
 ### Feat
