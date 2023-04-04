@@ -69,22 +69,22 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
 
     versions_path = Path(SOURCES_VERSION_YAML)
     container_path = Path(CONTAINER_YAML)
-    commitsh_map = yaml.safe_load(versions_path.open())
+    committish_map = yaml.safe_load(versions_path.open())
     container_data = yaml.safe_load(container_path.open())
     perform_update = False
     for source in container_data["remote_sources"]:
         try:
-            commitsh = commitsh_map[source["name"]]
+            committish = committish_map[source["name"]]
         except KeyError:
             continue
         user, repository = repo_regex.search(source["remote_source"]["repo"]).groups()
-        commit_sha = _get_commit_sha(user, repository, commitsh)
+        commit_sha = _get_commit_sha(user, repository, committish)
         if commit_sha == source["remote_source"]["ref"]:
             console.print(f"\[{source['name']}] Nothing to update")
         else:
             console.print(f"\[{source['name']}] updating ref to '{commit_sha}'")
             source["remote_source"]["ref"] = commit_sha
-            _side_effects(source, commitsh)
+            _side_effects(source, committish)
             perform_update = True
 
     if perform_update:
@@ -123,8 +123,8 @@ def update_dockerfile(distgit_path: Path = distgit_path_arg):
 
 
 def _get_quipucords_version():
-    commitsh_map = yaml.safe_load(Path(SOURCES_VERSION_YAML).open())
-    quipucords_version = commitsh_map["quipucords-server"]
+    committish_map = yaml.safe_load(Path(SOURCES_VERSION_YAML).open())
+    quipucords_version = committish_map["quipucords-server"]
     return quipucords_version
 
 
@@ -169,9 +169,11 @@ def update_rust_deps(
     _update_rust_deps(versions)
 
 
-def _get_commit_sha(user, repository, commitsh):
-    with console.status(f"Resolving commit sha for {repository}:{commitsh}..."):
-        gh_url = f"https://api.github.com/repos/{user}/{repository}/commits/{commitsh}"
+def _get_commit_sha(user, repository, committish):
+    with console.status(f"Resolving commit sha for {repository}:{committish}..."):
+        gh_url = (
+            f"https://api.github.com/repos/{user}/{repository}/commits/{committish}"
+        )
         gh_response = requests.get(gh_url)
     if gh_response.ok:
         return gh_response.json()["sha"]
@@ -182,12 +184,12 @@ def _get_commit_sha(user, repository, commitsh):
     raise typer.Abort()
 
 
-def _side_effects(source: dict, commitsh: str):
+def _side_effects(source: dict, committish: str):
     """
     Side effects for quipucords-server.
 
     :param source: dict representing a "source" from container.yaml.
-    :param commitsh: commit-ish (using git jargon [1]), IoW, a commit, tag, branch name,
+    :param committish: commit-ish (using git jargon [1]), IoW, a commit, tag, branch name,
         etc. Preferably it should should be a tag formatted following semantic versioning
         (X.Y.Z).
 
@@ -196,7 +198,7 @@ def _side_effects(source: dict, commitsh: str):
     if not source["name"] == QUIPUCORDS_SERVER:
         return
     new_commit = source["remote_source"]["ref"]
-    _update_dockerfile(new_commit, commitsh)
+    _update_dockerfile(new_commit, committish)
     _update_rust_deps_if_required(source, new_commit)
 
 
@@ -215,7 +217,7 @@ def _update_rust_deps_if_required(source, new_commit):
         console.print(f"rust :crab: libraries remain the same ({old_versions}).")
 
 
-def _update_dockerfile(new_commit, commitsh):
+def _update_dockerfile(new_commit, committish):
     dockerfile = Path("Dockerfile")
     console.print("Updating Dockerfile ARG 'QUIPUCORDS_COMMIT'")
     updated_dockerfile = re.sub(
@@ -223,15 +225,17 @@ def _update_dockerfile(new_commit, commitsh):
         f'ARG QUIPUCORDS_COMMIT="{new_commit}"',
         dockerfile.read_text(),
     )
-    if re.match(r"\d+\.\d+\.\d+", commitsh):
-        console.print(f"Updating Dockerfile ARG 'DISCOVERY_VERSION' to '{commitsh}'")
+    if re.match(r"\d+\.\d+\.\d+", committish):
+        console.print(f"Updating Dockerfile ARG 'DISCOVERY_VERSION' to '{committish}'")
         updated_dockerfile = re.sub(
             r"ARG DISCOVERY_VERSION=.*",
-            f'ARG DISCOVERY_VERSION="{commitsh}"',
+            f'ARG DISCOVERY_VERSION="{committish}"',
             updated_dockerfile,
         )
     else:
-        console.print(f":warning: {commitsh=} is not formatted as a version :warning:")
+        console.print(
+            f":warning: {committish=} is not formatted as a version :warning:"
+        )
         console.print(":warning: 'DISCOVERY_VERSION' ARG won't be updated :warning:")
     dockerfile.write_text(updated_dockerfile)
 
