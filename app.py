@@ -83,8 +83,8 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
             console.print(f"\[{source['name']}] Nothing to update")
         else:
             console.print(f"\[{source['name']}] updating ref to '{commit_sha}'")
-            _side_effects(source, commit_sha)
             source["remote_source"]["ref"] = commit_sha
+            _side_effects(source, commitsh)
             perform_update = True
 
     if perform_update:
@@ -112,13 +112,20 @@ def _print_downstream_instructions(distgit_path: Path):
 
 
 @app.command()
-def update_quipucords_hash(distgit_path: Path = distgit_path_arg):
-    """Update QUIPUCORDS_COMMIT ARG on Dockerfile."""
-    console.print("Forcibly updating QUIPUCORDS_COMMIT ARG on Dockerfile")
+def update_dockerfile(distgit_path: Path = distgit_path_arg):
+    """Update discovery-server Dockerfile."""
+    console.print("Forcibly updating Dockerfile")
     distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
     source = _get_quipucords_source()
-    _update_quipucords_sha(source["remote_source"]["ref"])
+    quipucords_version = _get_quipucords_version()
+    _update_dockerfile(source["remote_source"]["ref"], quipucords_version)
+
+
+def _get_quipucords_version():
+    commitsh_map = yaml.safe_load(Path(SOURCES_VERSION_YAML).open())
+    quipucords_version = commitsh_map["quipucords-server"]
+    return quipucords_version
 
 
 def _get_quipucords_source():
@@ -175,10 +182,21 @@ def _get_commit_sha(user, repository, commitsh):
     raise typer.Abort()
 
 
-def _side_effects(source, new_commit):
+def _side_effects(source: dict, commitsh: str):
+    """
+    Side effects for quipucords-server.
+
+    :param source: dict representing a "source" from container.yaml.
+    :param commitsh: commit-ish (using git jargon [1]), IoW, a commit, tag, branch name,
+        etc. Preferably it should should be a tag formatted following semantic versioning
+        (X.Y.Z).
+
+    [1]: https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefcommit-ishacommit-ishalsocommittish
+    """  # noqa: E501
     if not source["name"] == QUIPUCORDS_SERVER:
         return
-    _update_quipucords_sha(new_commit)
+    new_commit = source["remote_source"]["ref"]
+    _update_dockerfile(new_commit, commitsh)
     _update_rust_deps_if_required(source, new_commit)
 
 
@@ -197,14 +215,24 @@ def _update_rust_deps_if_required(source, new_commit):
         console.print(f"rust :crab: libraries remain the same ({old_versions}).")
 
 
-def _update_quipucords_sha(new_commit):
-    console.print("Updating Dockerfile ARG QUIPUCORDS_COMMIT")
+def _update_dockerfile(new_commit, commitsh):
     dockerfile = Path("Dockerfile")
+    console.print("Updating Dockerfile ARG 'QUIPUCORDS_COMMIT'")
     updated_dockerfile = re.sub(
         r"ARG QUIPUCORDS_COMMIT=.*",
         f'ARG QUIPUCORDS_COMMIT="{new_commit}"',
         dockerfile.read_text(),
     )
+    if re.match(r"\d+\.\d+\.\d+", commitsh):
+        console.print(f"Updating Dockerfile ARG 'DISCOVERY_VERSION' to '{commitsh}'")
+        updated_dockerfile = re.sub(
+            r"ARG DISCOVERY_VERSION=.*",
+            f'ARG DISCOVERY_VERSION="{commitsh}"',
+            updated_dockerfile,
+        )
+    else:
+        console.print(f":warning: {commitsh=} is not formatted as a version :warning:")
+        console.print(":warning: 'DISCOVERY_VERSION' ARG won't be updated :warning:")
     dockerfile.write_text(updated_dockerfile)
 
 
