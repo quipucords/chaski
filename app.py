@@ -82,9 +82,9 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
         user, repository = repo_regex.search(source["remote_source"]["repo"]).groups()
         commit_sha = _get_commit_sha(user, repository, committish)
         if commit_sha == source["remote_source"]["ref"]:
-            console.print(f"\[{source['name']}] Nothing to update")
+            console.print(f"\\[{source['name']}] Nothing to update")
         else:
-            console.print(f"\[{source['name']}] updating ref to '{commit_sha}'")
+            console.print(f"\\[{source['name']}] updating ref to '{commit_sha}'")
             source["remote_source"]["ref"] = commit_sha
             _side_effects(source, committish)
             perform_update = True
@@ -109,7 +109,7 @@ def _print_downstream_instructions(distgit_path: Path):
         f"Check the changes on [green]{distgit_path}[/green], commit"
         " and push :rocket:"
     )
-    console.print(f"Then run [green]{RHPKG_COMMAND}[/green] \[{SCRATCH_OPTION}]")
+    console.print(f"Then run [green]{RHPKG_COMMAND}[/green] \\[{SCRATCH_OPTION}]")
     console.print(f"Example: [green]{RHPKG_EXAMPLE}[/green] :coffee:")
 
 
