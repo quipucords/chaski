@@ -1,3 +1,5 @@
+"""Chaski CLI - a helper for downstream builds of quipucords and qpc."""
+
 import io
 import os
 import re
@@ -255,6 +257,7 @@ def _get_rust_deps_versions(quipucords_repo, quipucords_sha):
 
 
 def cargo(cmd, manifest, *extra):
+    """Execute rust package manager (cargo)."""
     args = [shutil.which("cargo"), cmd, f"--manifest-path={manifest}"]
     args.extend(str(e) for e in extra)
     console.print(" ".join(args))
@@ -264,6 +267,7 @@ def cargo(cmd, manifest, *extra):
 
 
 def rhpkg(cmd, *args):
+    """Execute rhpkg CLI."""
     args = [shutil.which("rhpkg"), cmd, *[str(a) for a in args]]
     console.print(" ".join(args))
     return subprocess.check_call(args, stdout=sys.stderr, stderr=sys.stderr)
