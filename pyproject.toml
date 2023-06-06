@@ -19,7 +19,6 @@ typer = { extras = ["all"], version = "^0.6.1" }
 [tool.poetry.group.dev.dependencies]
 black = "^22.10.0"
 ipykernel = "^6.15.1"
-isort = "^5.10.1"
 ruff = "^0.0.270"
 
 [tool.poetry.group.commit-lint.dependencies]
@@ -43,6 +42,7 @@ select = [
     "D",   # pydocstyle
     "E",   # pycodestyle
     "F",   # pyflakes
+    "I",   # isort
     "Q",   # flake8-quotes
     "W",   # pycodestyle
     "PL",  # Pylint
