@@ -56,12 +56,11 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
     """
     Update remote-sources on 'container.yaml' based on 'sources-version.yaml'.
 
-    If changes are detected to quipucords-server, than this will also invoke
+    If changes are detected to commit refs, then this will also invoke
     the following subcommands:
 
-    - update-quipucords-sha
-
-    - update-rust-deps dependencies when a version change is detected.
+    - update_dockerfile
+    - update_rust_deps dependencies when a version change is detected.
 
     Check --help method of these subcommands for more info.
     """
