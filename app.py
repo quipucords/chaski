@@ -1,4 +1,5 @@
 """Chaski CLI - a helper for downstream builds of quipucords and qpc."""
+from __future__ import annotations
 
 import io
 import os
@@ -20,6 +21,7 @@ app = typer.Typer(no_args_is_help=True)
 CONTAINER_YAML = "container.yaml"
 QUIPUCORDS_REQUIREMENTS_URL = "https://raw.githubusercontent.com/%s/%s/requirements.txt"
 QUIPUCORDS_SERVER = "quipucords-server"
+QPC = "qpc"
 SOURCES_VERSION_YAML = "sources-version.yaml"
 DEPENDENCIES_FOLDER = "dependencies"
 RUST_SOURCE_URL = {
@@ -118,9 +120,11 @@ def update_dockerfile(distgit_path: Path = distgit_path_arg):
     console.print("Forcibly updating Dockerfile")
     distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
-    source = _get_quipucords_source()
+    source = _get_source_by_name(QUIPUCORDS_SERVER)
     quipucords_version = _get_quipucords_version()
-    _update_dockerfile(source["remote_source"]["ref"], quipucords_version)
+    _update_dockerfile_quipucords(source["remote_source"]["ref"], quipucords_version)
+    source = _get_source_by_name(QPC)
+    _update_dockerfile_qpc(source["remote_source"]["ref"])
 
 
 def _get_quipucords_version():
@@ -129,11 +133,11 @@ def _get_quipucords_version():
     return quipucords_version
 
 
-def _get_quipucords_source():
+def _get_source_by_name(name):
     container_path = Path(CONTAINER_YAML)
     container_data = yaml.safe_load(container_path.open())
     for source in container_data["remote_sources"]:
-        if source["name"] == QUIPUCORDS_SERVER:
+        if source["name"] == name:
             return source
     assert False
 
@@ -156,7 +160,7 @@ def update_rust_deps(
             "bcrypt": bcrypt_version,
         }
     else:
-        source = _get_quipucords_source()
+        source = _get_source_by_name(QUIPUCORDS_SERVER)
         quipucords_repo = _get_repo_from_source(source)
         versions = _get_rust_deps_versions(
             quipucords_repo,
@@ -185,9 +189,9 @@ def _get_commit_sha(user, repository, committish):
     raise typer.Abort()
 
 
-def _side_effects(source: dict, committish: str):
+def _side_effects(source: dict, committish: str | None = None):
     """
-    Side effects for quipucords-server.
+    Side effects for quipucords-server and qpc.
 
     :param source: dict representing a "source" from container.yaml.
     :param committish: commit-ish (using git jargon [1]), IoW, a commit, tag, branch name,
@@ -196,11 +200,13 @@ def _side_effects(source: dict, committish: str):
 
     [1]: https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefcommit-ishacommit-ishalsocommittish
     """  # noqa: E501
-    if not source["name"] == QUIPUCORDS_SERVER:
-        return
-    new_commit = source["remote_source"]["ref"]
-    _update_dockerfile(new_commit, committish)
-    _update_rust_deps_if_required(source, new_commit)
+    if source["name"] == QPC:
+        new_commit = source["remote_source"]["ref"]
+        _update_dockerfile_qpc(new_commit)
+    elif source["name"] == QUIPUCORDS_SERVER:
+        new_commit = source["remote_source"]["ref"]
+        _update_dockerfile_quipucords(new_commit, committish)
+        _update_rust_deps_if_required(source, new_commit)
 
 
 def _update_rust_deps_if_required(source, new_commit):
@@ -218,7 +224,7 @@ def _update_rust_deps_if_required(source, new_commit):
         console.print(f"rust :crab: libraries remain the same ({old_versions}).")
 
 
-def _update_dockerfile(new_commit, committish):
+def _update_dockerfile_quipucords(new_commit, committish):
     dockerfile = Path("Dockerfile")
     console.print("Updating Dockerfile ARG 'QUIPUCORDS_COMMIT'")
     updated_dockerfile = re.sub(
@@ -238,6 +244,15 @@ def _update_dockerfile(new_commit, committish):
             f":warning: {committish=} is not formatted as a version :warning:"
         )
         console.print(":warning: 'DISCOVERY_VERSION' ARG won't be updated :warning:")
+    dockerfile.write_text(updated_dockerfile)
+
+
+def _update_dockerfile_qpc(new_commit):
+    dockerfile = Path("Dockerfile")
+    console.print("Updating Dockerfile ARG 'QPC_COMMIT'")
+    updated_dockerfile = re.sub(
+        r"ARG QPC_COMMIT=.*", f'ARG QPC_COMMIT="{new_commit}"', dockerfile.read_text()
+    )
     dockerfile.write_text(updated_dockerfile)
 
 
