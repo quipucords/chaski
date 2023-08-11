@@ -50,6 +50,7 @@ select = [
     "PTH", # flake8-use-pathlib
 ]
 ignore = [
+    "D107",
     "D203", 
     "D403",
 ]
