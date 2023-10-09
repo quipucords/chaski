@@ -1,3 +1,9 @@
+## 0.3.0 (2023-10-09)
+
+### Feat
+
+- update QPC_COMMIT in downstream Dockerfile
+
 ## 0.2.0 (2023-04-04)
 
 ### Feat
