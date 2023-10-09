@@ -102,7 +102,7 @@ def _print_downstream_instructions(distgit_path: Path):
     """Remind the user commands for downstream building."""
     RHPKG_COMMAND = "rhpkg container-build --target=<target-build>"
     RHPKG_EXAMPLE = (
-        "rhpkg container-build --target=discovery-1.1-rhel-8-containers-candidate"
+        "rhpkg container-build --target=discovery-1-rhel-9-containers-candidate"
     )
     SCRATCH_OPTION = "--scratch if this is still in development"
     console.print("You are almost ready for a downstream build! :ship:")
