@@ -1,4 +1,5 @@
 """Chaski CLI - a helper for downstream builds of quipucords and qpc."""
+
 from __future__ import annotations
 
 import io
