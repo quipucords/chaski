@@ -1,3 +1,14 @@
+## 0.4.0 (2024-07-25)
+
+### Feat
+
+- also parse dependencies from requirements-build.txt
+- add support to maturin dependency
+
+### Fix
+
+- version comparison was completely broken
+
 ## 0.3.2 (2024-07-17)
 
 - update poetry.lock
