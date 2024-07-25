@@ -85,8 +85,9 @@ def update_remote_sources(distgit_path: Path = distgit_path_arg):
             console.print(f"\\[{source['name']}] Nothing to update")
         else:
             console.print(f"\\[{source['name']}] updating ref to '{commit_sha}'")
+            original_commit_sha = source["remote_source"]["ref"]
             source["remote_source"]["ref"] = commit_sha
-            _side_effects(source, committish)
+            _side_effects(source, committish, original_commit_sha)
             perform_update = True
 
     if perform_update:
@@ -171,7 +172,9 @@ def _get_commit_sha(user, repository, committish):
     raise typer.Abort()
 
 
-def _side_effects(source: dict, committish: str | None = None):
+def _side_effects(
+    source: dict, committish: str | None = None, original_commit_sha: str | None = None
+):
     """
     Side effects for quipucords-server and qpc.
 
@@ -179,6 +182,8 @@ def _side_effects(source: dict, committish: str | None = None):
     :param committish: commit-ish (using git jargon [1]), IoW, a commit, tag, branch name,
         etc. Preferably it should should be a tag formatted following semantic versioning
         (X.Y.Z).
+    :param: original_commit_sha: commit sha of the original version of given source; for now this is
+        only mandatory for quipucords.
 
     [1]: https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefcommit-ishacommit-ishalsocommittish
     """  # noqa: E501
@@ -188,13 +193,12 @@ def _side_effects(source: dict, committish: str | None = None):
     elif source["name"] == QUIPUCORDS_SERVER:
         new_commit = source["remote_source"]["ref"]
         _update_dockerfile_quipucords(new_commit, committish)
-        _update_rust_deps_if_required(source, new_commit)
+        _update_rust_deps_if_required(source, new_commit, original_commit_sha)
 
 
-def _update_rust_deps_if_required(source, new_commit):
+def _update_rust_deps_if_required(source, new_commit, old_commit):
     console.print("Checking if rust :crab: dependencies are updated.")
     quipucords_repo = _get_repo_from_source(source)
-    old_commit = source["remote_source"]["ref"]
     old_versions = _get_rust_deps_versions(quipucords_repo, old_commit)
     new_versions = _get_rust_deps_versions(quipucords_repo, new_commit)
     if old_versions != new_versions:
