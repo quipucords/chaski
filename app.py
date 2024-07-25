@@ -28,14 +28,12 @@ DEPENDENCIES_FOLDER = "dependencies"
 RUST_SOURCE_URL = {
     "cryptography": "https://github.com/pyca/cryptography/archive/refs/tags/%s.tar.gz",
     "bcrypt": "https://github.com/pyca/bcrypt/archive/refs/tags/%s.tar.gz",
+    "maturin": "https://github.com/PyO3/maturin/archive/refs/tags/v%s.tar.gz",
 }
 RUST_CARGO_PATH = {
     "cryptography": "src/rust/Cargo.toml",
     "bcrypt": "src/_bcrypt/Cargo.toml",
-}
-RUST_ADDOPTED_AT_VERSION = {
-    "cryptography": ("3", "4", "0"),
-    "bcrypt": ("4", "0", "0"),
+    "maturin": "Cargo.toml",
 }
 VENDOR_FILE = "cargo_vendor.tar.gz"
 
@@ -144,33 +142,16 @@ def _get_source_by_name(name):
 
 
 @app.command()
-def update_rust_deps(
-    distgit_path: Path = distgit_path_arg,
-    cryptography_version: str = package_version_arg,
-    bcrypt_version: str = package_version_arg,
-):
-    """Update rust dependencies.
-
-    Defaults to the versions defined on current quipucords-server.
-    """
+def update_rust_deps(distgit_path: Path = distgit_path_arg):
+    """Update rust dependencies."""
     distgit_path = distgit_path.absolute()
     os.chdir(distgit_path)
-    if cryptography_version and bcrypt_version:
-        versions = {
-            "cryptography": cryptography_version,
-            "bcrypt": bcrypt_version,
-        }
-    else:
-        source = _get_source_by_name(QUIPUCORDS_SERVER)
-        quipucords_repo = _get_repo_from_source(source)
-        versions = _get_rust_deps_versions(
-            quipucords_repo,
-            source["remote_source"]["ref"],
-        )
-        if cryptography_version:
-            versions["cryptography"] = cryptography_version
-        if bcrypt_version:
-            versions["bcrypt"] = bcrypt_version
+    source = _get_source_by_name(QUIPUCORDS_SERVER)
+    quipucords_repo = _get_repo_from_source(source)
+    versions = _get_rust_deps_versions(
+        quipucords_repo,
+        source["remote_source"]["ref"],
+    )
     console.print(f"Using the following libs: {versions}")
     _update_rust_deps(versions)
 
@@ -267,6 +248,14 @@ def _get_rust_deps_versions(quipucords_repo, quipucords_sha):
     versions = {}
     for dependency in RUST_CARGO_PATH.keys():
         match = re.search(rf"{dependency}==([\d\.]+)", requirements_content)
+        if not match:
+            message = f"couldn't find rust dependency '{dependency}'"
+            console.print(f":warning: [red]{message}[/red] :warning:")
+            console.print(
+                "[red]if you are not building an older version of discovery, "
+                "please check quipucords dependencies and update chaski[/red]"
+            )
+            continue
         versions[dependency] = match.group(1)
     return versions
 
@@ -291,9 +280,6 @@ def rhpkg(cmd, *args):
 def _update_rust_deps(versions: dict):
     cargo_manifests = []
     for dep, version in versions.items():
-        if tuple(version.split(".")) < RUST_ADDOPTED_AT_VERSION[dep]:
-            console.print(f"{dep}-{version} don't have rust dependencies.")
-            continue
         dependency_path = _get_dependency(dep, version)
         manifest_path = dependency_path / RUST_CARGO_PATH[dep]
         cargo_manifests.append(manifest_path)
