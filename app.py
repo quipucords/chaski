@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import requests
 import typer
@@ -333,8 +334,27 @@ def _get_dependency(dependency_name: str, version: str) -> Path:
     if not dl_resp.ok:
         console.print(f"Failed to download {url}", style="red")
         raise typer.Abort()
-    with tarfile.open(fileobj=io.BytesIO(dl_resp.content)) as tarball:
-        tarball.extractall(DEPENDENCIES_FOLDER)
+    with (
+        tarfile.open(fileobj=io.BytesIO(dl_resp.content)) as tarball,
+        TemporaryDirectory() as tmp_dir,
+    ):
+        tarball.extractall(tmp_dir)
+        extracted_files = list(Path(tmp_dir).iterdir())
+        if len(extracted_files) != 1:
+            console.print(
+                f"github tarball for {dependency_name}-{dependency_name} contains more "
+                "than a single 'toplevel' file. Please update chaski to handle this.",
+                style="red",
+            )
+            typer.Abort()
+        if not extracted_files[0].is_dir():
+            console.print(
+                f"github tarball for {dependency_name}-{dependency_name} doesn't "
+                "contain a directory. Please update chaski to handle this.",
+                style="red",
+            )
+            typer.Abort()
+        shutil.move(extracted_files[0], archive)
     return archive
 
 
