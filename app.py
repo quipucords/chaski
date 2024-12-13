@@ -201,7 +201,9 @@ def _side_effects(
 def _update_rust_deps_if_required(source, new_commit, old_commit):
     console.print("Checking if rust :crab: dependencies are updated.")
     quipucords_repo = _get_repo_from_source(source)
-    old_versions = _get_rust_deps_versions(quipucords_repo, old_commit)
+    old_versions = _get_rust_deps_versions(
+        quipucords_repo, old_commit, ignore_missing_deps=True
+    )
     new_versions = _get_rust_deps_versions(quipucords_repo, new_commit)
     if old_versions != new_versions:
         console.print(
@@ -248,7 +250,7 @@ def _get_repo_from_source(source):
     return source["remote_source"]["repo"].split("/", 3)[-1].strip(".git")
 
 
-def _get_rust_deps_versions(quipucords_repo, quipucords_sha):
+def _get_rust_deps_versions(quipucords_repo, quipucords_sha, ignore_missing_deps=False):
     requirements_content = ""
     for file in ["requirements.txt", "requirements-build.txt"]:
         requirements_url = QUIPUCORDS_FILE_URL % (quipucords_repo, quipucords_sha, file)
@@ -257,12 +259,14 @@ def _get_rust_deps_versions(quipucords_repo, quipucords_sha):
     for dependency in RUST_CARGO_PATH.keys():
         match = re.search(rf"{dependency}==([\d\.]+)", requirements_content)
         if not match:
-            message = f"couldn't find rust dependency '{dependency}'"
-            console.print(f":warning: [red]{message}[/red] :warning:")
-            console.print(
-                "[red]if you are not building an older version of discovery, "
-                "please check quipucords dependencies and update chaski[/red]"
-            )
+            if not ignore_missing_deps:
+                message = f"couldn't find rust dependency '{dependency}'"
+                console.print(f":warning: [red]{message}[/red] :warning:")
+                console.print(
+                    "if you are not building an older version of discovery, "
+                    "please check quipucords dependencies and update chaski",
+                    style="red",
+                )
             continue
         versions[dependency] = match.group(1)
     return versions
