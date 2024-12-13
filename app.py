@@ -29,11 +29,13 @@ RUST_SOURCE_URL = {
     "cryptography": "https://github.com/pyca/cryptography/archive/refs/tags/%s.tar.gz",
     "bcrypt": "https://github.com/pyca/bcrypt/archive/refs/tags/%s.tar.gz",
     "maturin": "https://github.com/PyO3/maturin/archive/refs/tags/v%s.tar.gz",
+    "rpds-py": "https://github.com/crate-py/rpds/archive/refs/tags/v%s.tar.gz",
 }
 RUST_CARGO_PATH = {
     "cryptography": "src/rust/Cargo.toml",
     "bcrypt": "src/_bcrypt/Cargo.toml",
     "maturin": "Cargo.toml",
+    "rpds-py": "Cargo.toml",
 }
 VENDOR_FILE = "cargo_vendor.tar.gz"
 
