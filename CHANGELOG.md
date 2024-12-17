@@ -1,3 +1,14 @@
+## 0.5.0 (2024-12-17)
+
+### Feat
+
+- add support to rpds-py
+
+### Fix
+
+- handle archives from github that are not named like their python packages
+- remove misleading error messages
+
 ## 0.4.0 (2024-07-25)
 
 ### Feat
