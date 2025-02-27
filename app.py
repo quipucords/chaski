@@ -21,7 +21,7 @@ console = Console()
 app = typer.Typer(no_args_is_help=True)
 
 CONTAINER_YAML = "container.yaml"
-QUIPUCORDS_FILE_URL = "https://raw.githubusercontent.com/%s/%s/%s"
+QUIPUCORDS_REQ_FILE_URL = "https://raw.githubusercontent.com/%s/%s/lockfiles/%s"
 QUIPUCORDS_SERVER = "quipucords-server"
 QPC = "qpc"
 SOURCES_VERSION_YAML = "sources-version.yaml"
@@ -254,7 +254,7 @@ def _get_repo_from_source(source):
 def _get_rust_deps_versions(quipucords_repo, quipucords_sha, ignore_missing_deps=False):
     requirements_content = ""
     for file in ["requirements.txt", "requirements-build.txt"]:
-        requirements_url = QUIPUCORDS_FILE_URL % (quipucords_repo, quipucords_sha, file)
+        requirements_url = QUIPUCORDS_REQ_FILE_URL % (quipucords_repo, quipucords_sha, file)
         requirements_content += requests.get(requirements_url).content.decode()
     versions = {}
     for dependency in RUST_CARGO_PATH.keys():
