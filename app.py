@@ -253,7 +253,7 @@ def _get_repo_from_source(source):
 
 def _get_rust_deps_versions(quipucords_repo, quipucords_sha, ignore_missing_deps=False):
     requirements_content = ""
-    for file in ["requirements.txt", "requirements-build.txt"]:
+    for file in ["lockfiles/requirements.txt", "lockfiles/requirements-build.txt"]:
         requirements_url = QUIPUCORDS_FILE_URL % (quipucords_repo, quipucords_sha, file)
         requirements_content += requests.get(requirements_url).content.decode()
     versions = {}
