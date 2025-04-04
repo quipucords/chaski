@@ -1,3 +1,9 @@
+## 0.5.1 (2025-04-04)
+
+### Fix
+
+- quipucords 1.13+ moved requirements files under lockfiles dir
+
 ## 0.5.0 (2024-12-17)
 
 ### Feat
